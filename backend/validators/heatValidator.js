@@ -6,8 +6,12 @@ const validateHeatInput = (req, res, next) => {
   }
 
   for (let layer of layers) {
-    if (!layer.thickness) {
-      return res.status(400).json({ error: "Layer thickness missing" });
+    if (typeof layer.thickness !== "number" || layer.thickness <= 0) {
+      return res.status(400).json({ error: "Invalid layer thickness" });
+    }
+
+    if (!layer.k && !layer.material) {
+      return res.status(400).json({ error: "Material or k required" });
     }
   }
 
@@ -21,7 +25,15 @@ const validateHeatInput = (req, res, next) => {
     return res.status(400).json({ error: "Boundary values missing" });
   }
 
-  if (area && area <= 0) {
+  if (typeof T_left !== "number" || typeof T_inf !== "number") {
+    return res.status(400).json({ error: "Invalid temperature values" });
+  }
+
+  if (typeof h !== "number" || h <= 0) {
+    return res.status(400).json({ error: "Invalid convection coefficient" });
+  }
+
+  if (area && (typeof area !== "number" || area <= 0)) {
     return res.status(400).json({ error: "Invalid area" });
   }
 
