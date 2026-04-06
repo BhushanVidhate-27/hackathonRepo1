@@ -23,5 +23,9 @@
   "homepage": "https://github.com/BhushanVidhate-27/hackathonRepo1#readme",
   "devDependencies": {
     "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "chart.js": "^4.5.1",
+    "react-chartjs-2": "^5.3.1"
   }
 }
