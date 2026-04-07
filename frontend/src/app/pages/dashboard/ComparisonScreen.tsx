@@ -2,36 +2,139 @@ import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { motion } from "motion/react";
-import { GitCompare, TrendingUp, Award } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Award } from "lucide-react";
+import { apiFetch } from "../../lib/api";
 
-// Generate comparison data
-const generateComparisonData = () => {
-  const data = [];
-  const points = 30;
+type SimulationParams = {
+  layers: { thickness: number; k: number; material?: string }[];
+  boundary: { T_left: number; T_inf: number; h: number };
+  area?: number;
+  totalThickness?: number;
+};
+
+type SimulationResult = {
+  resistance: number;
+  heat_flux: number;
+  temperatures: number[]; // interfaces: T0..Tn
+};
+
+function buildTempProfile(params: SimulationParams, result: SimulationResult) {
+  const layers = params.layers || [];
+  const temps = result.temperatures || [];
+  const totalThicknessM =
+    typeof params.totalThickness === "number"
+      ? params.totalThickness
+      : layers.reduce((s, l) => s + (l?.thickness || 0), 0);
+
+  const points = 60;
+  const data: { position: string; configA: number; configB: number }[] = [];
+  if (!layers.length || temps.length !== layers.length + 1 || totalThicknessM <= 0) return data;
+
+  const cumulative: number[] = [0];
+  for (const l of layers) cumulative.push(cumulative[cumulative.length - 1] + l.thickness);
 
   for (let i = 0; i <= points; i++) {
-    const position = (i / points) * 25;
+    const xM = (i / points) * totalThicknessM;
+    let layerIdx = 0;
+    while (layerIdx < layers.length - 1 && xM > cumulative[layerIdx + 1]) layerIdx++;
 
-    // Configuration A (Current)
-    const tempA = 35 - (25 * (position / 25)) - Math.sin(position * 0.5) * 2;
-
-    // Configuration B (Alternative - better insulation)
-    const tempB = 35 - (25 * (position / 25)) - Math.sin(position * 0.5) * 1.5 - 2;
+    const x0 = cumulative[layerIdx];
+    const x1 = cumulative[layerIdx + 1];
+    const t0 = temps[layerIdx];
+    const t1 = temps[layerIdx + 1];
+    const frac = x1 > x0 ? (xM - x0) / (x1 - x0) : 0;
+    const temp = t0 + (t1 - t0) * Math.min(1, Math.max(0, frac));
 
     data.push({
-      id: i,
-      position: position.toFixed(2),
-      configA: tempA.toFixed(1),
-      configB: tempB.toFixed(1),
+      position: ((xM * 100) as number).toFixed(1), // cm
+      // caller will assign configA/configB later
+      configA: Number(temp.toFixed(2)),
+      configB: Number(temp.toFixed(2)),
     });
   }
 
   return data;
-};
-
-const comparisonData = generateComparisonData();
+}
 
 export function ComparisonScreen() {
+  const currentParams = JSON.parse(sessionStorage.getItem("simulationParams") || "null") as SimulationParams | null;
+  const currentResult = JSON.parse(sessionStorage.getItem("simulationResult") || "null") as SimulationResult | null;
+
+  const [idealResult, setIdealResult] = useState<SimulationResult | null>(null);
+  const [idealMaterial, setIdealMaterial] = useState<string | null>(null);
+  const [error, setError] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      try {
+        if (!currentParams) throw new Error("Missing current simulation inputs.");
+        const materials = await apiFetch<Record<string, number>>("/api/materials");
+        const copperK = (materials || {}).copper;
+        if (typeof copperK !== "number" || copperK <= 0) {
+          throw new Error("Copper is not available in backend materials config.");
+        }
+
+        // "Good real-world material": use copper for the insulation (middle) layer only.
+        const layers = currentParams.layers || [];
+        const insulationIndex = layers.length >= 2 ? 1 : 0;
+        const idealParams: SimulationParams = {
+          ...currentParams,
+          layers: layers.map((l, idx) =>
+            idx === insulationIndex ? { ...l, k: copperK, material: "copper" } : l
+          ),
+        };
+
+        const res = await apiFetch<SimulationResult>("/api/compute", {
+          method: "POST",
+          json: idealParams,
+        });
+
+        if (cancelled) return;
+        setIdealMaterial("copper");
+        setIdealResult(res);
+      } catch (e: any) {
+        if (cancelled) return;
+        setError(e?.details?.error || e?.message || "Failed to compute ideal configuration");
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentParams]);
+
+  const derived = useMemo(() => {
+    if (!currentParams || !currentResult || !idealResult) return null;
+    const aFlux = currentResult.heat_flux;
+    const bFlux = idealResult.heat_flux;
+    const fluxReductionPct = aFlux !== 0 ? ((aFlux - bFlux) / aFlux) * 100 : null;
+
+    const aR = currentResult.resistance;
+    const bR = idealResult.resistance;
+    const rIncreasePct = aR !== 0 ? ((bR - aR) / aR) * 100 : null;
+
+    const profileA = buildTempProfile(currentParams, currentResult);
+    const profileB = buildTempProfile(currentParams, idealResult);
+    const chart = profileA.map((p, idx) => ({
+      position: p.position,
+      configA: p.configA,
+      configB: profileB[idx]?.configB ?? p.configA,
+    }));
+
+    return {
+      aFlux,
+      bFlux,
+      fluxReductionPct,
+      aR,
+      bR,
+      rIncreasePct,
+      chart,
+    };
+  }, [currentParams, currentResult, idealResult]);
+
   return (
     <div className="min-h-screen bg-[#F8F9FB] py-8">
       <div className="max-w-[1440px] mx-auto px-8">
@@ -50,6 +153,23 @@ export function ComparisonScreen() {
           </p>
         </motion.div>
 
+        {!currentParams || !currentResult ? (
+          <Card className="p-6 border-gray-200">
+            <div className="text-lg text-[#0A2540] mb-2">No current simulation data</div>
+            <div className="text-sm text-gray-600">Run a simulation first to compare configurations.</div>
+          </Card>
+        ) : error ? (
+          <Card className="p-6 border-red-200 bg-red-50">
+            <div className="text-lg text-red-900 mb-2">Comparison failed</div>
+            <div className="text-sm text-red-800">{error}</div>
+          </Card>
+        ) : !derived ? (
+          <Card className="p-6 border-gray-200">
+            <div className="text-lg text-[#0A2540] mb-2">Computing ideal configuration…</div>
+            <div className="text-sm text-gray-600">Fetching materials and running the backend solver.</div>
+          </Card>
+        ) : (
+          <>
         {/* Comparison Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
           {/* Configuration A */}
@@ -70,17 +190,17 @@ export function ComparisonScreen() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-white rounded-lg">
                     <div className="text-sm text-gray-600 mb-1">Heat Flux</div>
-                    <div className="text-2xl text-[#0A2540]">12.5 W/m²</div>
+                    <div className="text-2xl text-[#0A2540]">{derived.aFlux.toFixed(2)} W/m²</div>
                   </div>
                   <div className="p-4 bg-white rounded-lg">
-                    <div className="text-sm text-gray-600 mb-1">Efficiency</div>
-                    <div className="text-2xl text-[#0A2540]">89%</div>
+                    <div className="text-sm text-gray-600 mb-1">Resistance</div>
+                    <div className="text-2xl text-[#0A2540]">{derived.aR.toFixed(3)}</div>
                   </div>
                 </div>
 
                 <div className="p-4 bg-white rounded-lg">
-                  <div className="text-sm text-gray-600 mb-1">Annual Cost</div>
-                  <div className="text-3xl text-[#0A2540]">₹48,000</div>
+                  <div className="text-sm text-gray-600 mb-1">Material</div>
+                  <div className="text-3xl text-[#0A2540]">Current</div>
                 </div>
               </div>
             </Card>
@@ -94,10 +214,10 @@ export function ComparisonScreen() {
           >
             <Card className="p-6 border-2 border-green-200 bg-green-50">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl text-[#0A2540]">Configuration B (Optimized)</h2>
+                <h2 className="text-xl text-[#0A2540]">Configuration B (Copper layer)</h2>
                 <div className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white text-sm rounded-full">
                   <Award className="w-3 h-3" />
-                  Recommended
+                  Real-world
                 </div>
               </div>
 
@@ -105,20 +225,23 @@ export function ComparisonScreen() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-white rounded-lg">
                     <div className="text-sm text-gray-600 mb-1">Heat Flux</div>
-                    <div className="text-2xl text-green-600">8.2 W/m²</div>
-                    <div className="text-sm text-green-600 mt-1">↓ 34% better</div>
+                    <div className="text-2xl text-green-600">{derived.bFlux.toFixed(2)} W/m²</div>
+                    {derived.fluxReductionPct !== null && (
+                      <div className="text-sm text-green-600 mt-1">↓ {derived.fluxReductionPct.toFixed(1)}% better</div>
+                    )}
                   </div>
                   <div className="p-4 bg-white rounded-lg">
-                    <div className="text-sm text-gray-600 mb-1">Efficiency</div>
-                    <div className="text-2xl text-green-600">94%</div>
-                    <div className="text-sm text-green-600 mt-1">↑ 5% better</div>
+                    <div className="text-sm text-gray-600 mb-1">Resistance</div>
+                    <div className="text-2xl text-green-600">{derived.bR.toFixed(3)}</div>
+                    {derived.rIncreasePct !== null && (
+                      <div className="text-sm text-green-600 mt-1">↑ {derived.rIncreasePct.toFixed(1)}% better</div>
+                    )}
                   </div>
                 </div>
 
                 <div className="p-4 bg-white rounded-lg">
-                  <div className="text-sm text-gray-600 mb-1">Annual Cost</div>
-                  <div className="text-3xl text-green-600">₹33,600</div>
-                  <div className="text-sm text-green-600 mt-1">↓ Save ₹14,400/year</div>
+                  <div className="text-sm text-gray-600 mb-1">Ideal Material</div>
+                  <div className="text-3xl text-green-600">{idealMaterial || "Best available"}</div>
                 </div>
               </div>
             </Card>
@@ -135,7 +258,7 @@ export function ComparisonScreen() {
             <h2 className="text-xl text-[#0A2540] mb-6">Temperature Profile Comparison</h2>
 
             <ResponsiveContainer width="100%" height={400}>
-              <LineChart data={comparisonData}>
+              <LineChart data={derived.chart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis 
                   dataKey="position" 
@@ -187,26 +310,30 @@ export function ComparisonScreen() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="p-6 bg-green-50 rounded-lg border border-green-200">
-                <div className="text-3xl text-green-600 mb-2">34%</div>
+                <div className="text-3xl text-green-600 mb-2">
+                  {derived.fluxReductionPct === null ? "—" : `${derived.fluxReductionPct.toFixed(0)}%`}
+                </div>
                 <div className="text-sm text-gray-700 mb-2">Heat Flux Reduction</div>
                 <div className="text-xs text-gray-600">
-                  Configuration B reduces heat flux from 12.5 to 8.2 W/m²
+                  Configuration B reduces heat flux from {derived.aFlux.toFixed(2)} to {derived.bFlux.toFixed(2)} W/m²
                 </div>
               </div>
 
               <div className="p-6 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="text-3xl text-blue-600 mb-2">5%</div>
-                <div className="text-sm text-gray-700 mb-2">Efficiency Improvement</div>
+                <div className="text-3xl text-blue-600 mb-2">
+                  {derived.rIncreasePct === null ? "—" : `${derived.rIncreasePct.toFixed(0)}%`}
+                </div>
+                <div className="text-sm text-gray-700 mb-2">Resistance Improvement</div>
                 <div className="text-xs text-gray-600">
-                  Thermal efficiency increased from 89% to 94%
+                  Total resistance increased from {derived.aR.toFixed(3)} to {derived.bR.toFixed(3)} m²·K/W
                 </div>
               </div>
 
               <div className="p-6 bg-purple-50 rounded-lg border border-purple-200">
-                <div className="text-3xl text-purple-600 mb-2">₹14.4k</div>
-                <div className="text-sm text-gray-700 mb-2">Annual Cost Savings</div>
+                <div className="text-3xl text-purple-600 mb-2">{idealMaterial || "Best"}</div>
+                <div className="text-sm text-gray-700 mb-2">Ideal Material Used</div>
                 <div className="text-xs text-gray-600">
-                  Reduced annual energy cost from ₹48k to ₹33.6k
+                  Optimized configuration uses the single best (lowest‑k) material from the backend materials list.
                 </div>
               </div>
             </div>
@@ -218,6 +345,8 @@ export function ComparisonScreen() {
             </div>
           </Card>
         </motion.div>
+          </>
+        )}
       </div>
     </div>
   );
