@@ -17,7 +17,7 @@ app.get("/", (req, res)=>{
     res.send("backend running");
 });
 app.listen(port, ()=>{
-    console.log("app working on 8080");
+console.log(`app working on ${port}`);
 });
 
 module.exports = app;

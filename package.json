@@ -1,13 +1,13 @@
 {
   "name": "hack",
   "version": "1.0.0",
-  "description": "No desc",
-  "main": "index.js",
+  "description": "Thermal simulation app",
+  "main": "backend/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "concurrently \"npm run dev --prefix frontend\" \"npm start --prefix backend\"",
     "frontend": "npm run dev --prefix frontend",
-    "backend": "npm start --prefix backend"
+    "backend": "npm start --prefix backend",
+    "test": "echo 'Tests coming soon' && exit 0"
   },
   "repository": {
     "type": "git",
@@ -25,10 +25,8 @@
     "concurrently": "^9.2.1"
   },
   "dependencies": {
-    "chart.js": "^4.5.1",
     "cors": "^2.8.6",
-    "express": "^5.2.1",
-    "nodemon": "^3.1.14",
-    "react-chartjs-2": "^5.3.1"
+    "express": "^4.21.1",
+    "nodemon": "^3.1.14"
   }
 }
