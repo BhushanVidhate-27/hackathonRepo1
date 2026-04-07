@@ -1,3 +1,4 @@
+import React from "react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Card } from "../../components/ui/card";
@@ -6,14 +7,6 @@ import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { ArrowRight, AlertCircle, Plus, Trash2 } from "lucide-react";
 import { motion } from "motion/react";
-
-const industries = [
-  { value: "general", label: "General Purpose" },
-  { value: "cold-storage", label: "Cold Storage" },
-  { value: "hvac", label: "HVAC Systems" },
-  { value: "industrial", label: "Industrial Furnaces" },
-  { value: "residential", label: "Residential Construction" },
-];
 
 interface Layer {
   id: string;
@@ -25,22 +18,18 @@ interface Layer {
 export function InputDashboard() {
   const navigate = useNavigate();
   
-  const [hotTemp, setHotTemp] = useState("35");
-  const [coldTemp, setColdTemp] = useState("10");
+  const [hotTemp, setHotTemp] = useState("");
+  const [coldTemp, setColdTemp] = useState("");
   
   const [layers, setLayers] = useState<Layer[]>([
-    { id: "1", thickness: "10", conductivity: "1.4", unit: "cm" },
-    { id: "2", thickness: "5", conductivity: "0.04", unit: "cm" },
-    { id: "3", thickness: "10", conductivity: "0.6", unit: "cm" }
+    { id: "1", thickness: "", conductivity: "", unit: "cm" }
   ]);
-  
-  const [industry, setIndustry] = useState("general");
 
   const addLayer = () => {
     const newLayer: Layer = {
       id: Date.now().toString(),
-      thickness: "10",
-      conductivity: "1.0",
+      thickness: "",
+      conductivity: "",
       unit: "cm"
     };
     setLayers([...layers, newLayer]);
@@ -96,7 +85,6 @@ export function InputDashboard() {
         h: 10
       },
       area: 1,
-      industry,
       totalThickness: processedLayers.reduce((sum, l) => sum + l.thickness, 0)
     }));
     
@@ -131,35 +119,18 @@ export function InputDashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
-            {/* Industry */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
-              <Card className="p-6">
-                <h2 className="text-xl text-[#0A2540] mb-4">Industry Mode</h2>
-                <Select value={industry} onValueChange={setIndustry}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {industries.map((ind) => (
-                      <SelectItem key={ind.value} value={ind.value}>{ind.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Card>
-            </motion.div>
-
             {/* Temps */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
               <Card className="p-6">
                 <h2 className="text-xl text-[#0A2540] mb-6">Boundary Temperatures</h2>
                 <div className="grid md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm text-gray-700 mb-2 block">Hot Side (°C)</label>
-                    <Input type="number" value={hotTemp} onChange={(e) => setHotTemp(e.target.value)} className="text-lg" />
+                    <Input type="number" value={hotTemp} onChange={(e) => setHotTemp(e.target.value)} placeholder="e.g. 20–80" className="text-lg" />
                   </div>
                   <div>
                     <label className="text-sm text-gray-700 mb-2 block">Cold Side (°C)</label>
-                    <Input type="number" value={coldTemp} onChange={(e) => setColdTemp(e.target.value)} className="text-lg" />
+                    <Input type="number" value={coldTemp} onChange={(e) => setColdTemp(e.target.value)} placeholder="e.g. -20–30" className="text-lg" />
                   </div>
                 </div>
                 <div className="mt-4 p-3 bg-gray-50 rounded-lg">
@@ -169,7 +140,7 @@ export function InputDashboard() {
             </motion.div>
 
             {/* Layers */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
               <Card className="p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl text-[#0A2540]">Layer Configuration</h2>
@@ -177,7 +148,7 @@ export function InputDashboard() {
                     <Plus className="w-4 h-4" /> Add Layer
                   </Button>
                 </div>
-                <div className="space Asc-y-4">
+                <div className="space-y-4">
                   {layers.map((layer, index) => {
                     const colorClass = getLayerColor(index);
                     const position = index === 0 ? "Hot" : index === layers.length - 1 ? "Cold" : "Middle";
@@ -195,7 +166,13 @@ export function InputDashboard() {
                           <div>
                             <label className="text-sm text-gray-700 mb-2 block">Thickness</label>
                             <div className="flex gap-2">
-                              <Input type="number" value={layer.thickness} onChange={(e) => updateLayer(layer.id, 'thickness', e.target.value)} className="flex-1" />
+                              <Input
+                                type="number"
+                                value={layer.thickness}
+                                onChange={(e) => updateLayer(layer.id, 'thickness', e.target.value)}
+                                placeholder={layer.unit === "mm" ? "e.g. 5–500" : "e.g. 1–50"}
+                                className="flex-1"
+                              />
                               <Select value={layer.unit} onValueChange={(value) => updateLayer(layer.id, 'unit', value)}>
                                 <SelectTrigger className="w-20">
                                   <SelectValue />
@@ -209,7 +186,13 @@ export function InputDashboard() {
                           </div>
                           <div>
                             <label className="text-sm text-gray-700 mb-2 block">k (W/m·K)</label>
-                            <Input type="number" value={layer.conductivity} onChange={(e) => updateLayer(layer.id, 'conductivity', e.target.value)} className="flex-1" />
+                            <Input
+                              type="number"
+                              value={layer.conductivity}
+                              onChange={(e) => updateLayer(layer.id, 'conductivity', e.target.value)}
+                              placeholder="e.g. 0.02–2.0"
+                              className="flex-1"
+                            />
                           </div>
                         </div>
                       </div>
@@ -230,15 +213,15 @@ export function InputDashboard() {
               <Card className="p-6">
                 <h3 className="text-lg text-[#0A2540] mb-4">Summary</h3>
                 <div className="space-y-4">
-                  <div className="p-3 bg-gray Asc-50 rounded-lg">
+                  <div className="p-3 bg-gray-50 rounded-lg">
                     <div className="text-xs text-gray-600 mb-1">Thickness</div>
                     <div className="text-2xl text-[#0A2540]">{totalThicknessCm.toFixed(1)} cm</div>
                   </div>
-                  <div className="p-3 bg-gray Asc-50 rounded-lg">
+                  <div className="p-3 bg-gray-50 rounded-lg">
                     <div className="text-xs text-gray-600 mb-1">ΔT</div>
                     <div className="text-2xl text-[#0A2540]">{tempDifference.toFixed(1)}°C</div>
                   </div>
-                  <div className="p-3 bg-gray Asc-50 rounded-lg">
+                  <div className="p-3 bg-gray-50 rounded-lg">
                     <div className="text-xs text-gray-600 mb-1">Layers</div>
                     <div className="text-2xl text-[#0A2540]">{layers.length}</div>
                   </div>
