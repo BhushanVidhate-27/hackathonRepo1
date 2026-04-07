@@ -12,16 +12,7 @@ const features = [
     ],
     imageGradient: "from-red-500 via-orange-500 to-yellow-500"
   },
-  {
-    icon: Cpu,
-    title: "AI Material Optimization",
-    description: "Machine learning models trained on thousands of material configurations automatically identify the optimal combination for your specific requirements. Reduce costs while improving thermal performance.",
-    stats: [
-      { label: "Materials DB", value: "500+" },
-      { label: "Cost Reduction", value: "25%" }
-    ],
-    imageGradient: "from-purple-500 via-pink-500 to-red-500"
-  },
+  
   {
     icon: TrendingUp,
     title: "Real-Time Interactive Graphs",
@@ -32,16 +23,7 @@ const features = [
     ],
     imageGradient: "from-blue-500 via-cyan-500 to-teal-500"
   },
-  {
-    icon: Factory,
-    title: "Industry-Specific Modes",
-    description: "Pre-configured templates for cold storage facilities, HVAC systems, industrial furnaces, and residential construction. Each mode includes industry standards, compliance checks, and best practices.",
-    stats: [
-      { label: "Industries", value: "5+" },
-      { label: "Templates", value: "20+" }
-    ],
-    imageGradient: "from-green-500 via-emerald-500 to-teal-500"
-  }
+ 
 ];
 
 export function FeaturesSection() {
