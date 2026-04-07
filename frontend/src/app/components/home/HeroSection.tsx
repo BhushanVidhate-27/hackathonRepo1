@@ -21,10 +21,7 @@ export function HeroSection() {
             transition={{ duration: 0.6 }}
             className="space-y-8"
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#3A86FF]/10 text-[#3A86FF] rounded-full text-sm">
-              <span className="w-2 h-2 bg-[#3A86FF] rounded-full animate-pulse" />
-              AI-Powered Thermal Analysis
-            </div>
+          
 
             <h1 className="text-5xl lg:text-6xl text-[#0A2540] leading-tight">
               Smart Thermal Analysis for{" "}
@@ -45,28 +42,10 @@ export function HeroSection() {
                   <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="text-[#0A2540] border-[#0A2540] hover:bg-[#0A2540]/5 text-lg px-8 py-6">
-                <Play className="mr-2 w-5 h-5" />
-                View Demo
-              </Button>
+              
             </div>
 
-            <div className="flex items-center gap-8 pt-4">
-              <div className="text-center">
-                <div className="text-3xl text-[#0A2540]">95%</div>
-                <div className="text-sm text-gray-600">Accuracy</div>
-              </div>
-              <div className="w-px h-12 bg-gray-300" />
-              <div className="text-center">
-                <div className="text-3xl text-[#0A2540]">10k+</div>
-                <div className="text-sm text-gray-600">Simulations</div>
-              </div>
-              <div className="w-px h-12 bg-gray-300" />
-              <div className="text-center">
-                <div className="text-3xl text-[#0A2540]">30%</div>
-                <div className="text-sm text-gray-600">Energy Savings</div>
-              </div>
-            </div>
+           
           </motion.div>
 
           {/* Right Column - Visualization */}

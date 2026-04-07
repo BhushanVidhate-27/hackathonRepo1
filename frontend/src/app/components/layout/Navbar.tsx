@@ -23,9 +23,7 @@ export function Navbar() {
 
           {/* CTA */}
           <div className="flex items-center gap-4">
-            <Button variant="ghost" className="text-[#0A2540]">
-              Sign In
-            </Button>
+          
             <Link to="/dashboard">
               <Button className="bg-[#3A86FF] hover:bg-[#2A76EF] text-white">
                 Start Simulation
