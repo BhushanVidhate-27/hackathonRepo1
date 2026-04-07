@@ -5,6 +5,7 @@ import { CartesianGrid, ResponsiveContainer, Tooltip, Area, AreaChart, XAxis, YA
 import { motion } from "motion/react";
 import { Download, Eye, ArrowRight } from "lucide-react";
 import { Link } from "react-router";
+import { downloadJson } from "../../lib/download";
 
 type SimulationParams = {
   layers: { thickness: number; k: number }[];
@@ -82,6 +83,19 @@ export function ResultsDashboard() {
   const uValue = rTotal > 0 ? 1 / rTotal : null;
   const tempData = buildTempProfile(params, result);
 
+  const handleExportData = () => {
+    const date = new Date().toISOString().slice(0, 10);
+    downloadJson(`simulation-results-${date}`, {
+      generatedAt: new Date().toISOString(),
+      simulationParams: params,
+      simulationResult: result,
+      derived: {
+        deltaT,
+        uValue,
+      },
+    });
+  };
+
   return (
     <div className="min-h-screen bg-[#F8F9FB] py-8">
       <div className="max-w-[1440px] mx-auto px-8">
@@ -108,7 +122,7 @@ export function ResultsDashboard() {
                   View Layers
                 </Button>
               </Link>
-              <Button className="bg-[#3A86FF] hover:bg-[#2A76EF] text-white gap-2">
+              <Button className="bg-[#3A86FF] hover:bg-[#2A76EF] text-white gap-2" onClick={handleExportData}>
                 <Download className="w-4 h-4" />
                 Export Data
               </Button>

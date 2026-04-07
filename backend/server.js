@@ -4,6 +4,7 @@ const path = require("path");
 const cors = require("cors");
 const computeRoute   = require("./routes/compute.js");
 const materialsRoute = require("./routes/materials.js");
+const reportRoute    = require("./routes/report.js");
 
 const port = Number(process.env.PORT) || 8080;
 
@@ -21,6 +22,7 @@ app.use(express.json());
 
 app.use("/api", computeRoute);
 app.use("/api", materialsRoute);
+app.use("/api", reportRoute);
 
 app.get("/", (req, res)=>{
     res.send("backend running");
