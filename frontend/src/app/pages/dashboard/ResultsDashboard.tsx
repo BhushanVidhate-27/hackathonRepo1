@@ -1,56 +1,86 @@
+import React from "react";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
+import { CartesianGrid, ResponsiveContainer, Tooltip, Area, AreaChart, XAxis, YAxis } from "recharts";
 import { motion } from "motion/react";
-import { TrendingDown, Thermometer, ArrowRight, Download, Eye } from "lucide-react";
+import { Download, Eye, ArrowRight } from "lucide-react";
 import { Link } from "react-router";
 
-// Generate temperature distribution data
-const generateTempData = () => {
-  const params = JSON.parse(sessionStorage.getItem('simulationParams') || '{}');
-  const totalThickness = (params.layer1Thickness || 10) + (params.layer2Thickness || 5) + (params.layer3Thickness || 10);
-  const hotTemp = params.hotTemp || 35;
-  const coldTemp = params.coldTemp || 10;
-  
-  const data = [];
-  const points = 50;
-  
-  for (let i = 0; i <= points; i++) {
-    const position = (i / points) * totalThickness;
-    
-    // Simulate temperature drop across layers with different thermal conductivities
-    let temp;
-    const layer1End = params.layer1Thickness || 10;
-    const layer2End = layer1End + (params.layer2Thickness || 5);
-    
-    if (position <= layer1End) {
-      // Layer 1 - gradual drop
-      temp = hotTemp - (hotTemp - hotTemp + 8) * (position / layer1End);
-    } else if (position <= layer2End) {
-      // Layer 2 - steep drop (insulation)
-      const layer2Progress = (position - layer1End) / (params.layer2Thickness || 5);
-      temp = (hotTemp - 8) - (hotTemp - coldTemp - 10) * layer2Progress;
-    } else {
-      // Layer 3 - gradual drop
-      const layer3Progress = (position - layer2End) / (params.layer3Thickness || 10);
-      temp = (coldTemp + 2) - 2 * layer3Progress;
-    }
-    
-    data.push({
-      position: position.toFixed(1),
-      temperature: temp.toFixed(1),
-    });
-  }
-  
-  return data;
+type SimulationParams = {
+  layers: { thickness: number; k: number }[];
+  boundary: { T_left: number; T_inf: number; h: number };
+  area?: number;
+  totalThickness?: number;
 };
 
-const tempData = generateTempData();
+type SimulationResult = {
+  resistance: number;
+  heat_flux: number;
+  temperatures: number[]; // interfaces: T0..Tn
+};
+
+function buildTempProfile(params: SimulationParams, result: SimulationResult) {
+  const layers = params.layers || [];
+  const temps = result.temperatures || [];
+  const totalThicknessM =
+    typeof params.totalThickness === "number"
+      ? params.totalThickness
+      : layers.reduce((s, l) => s + (l?.thickness || 0), 0);
+
+  const points = 60;
+  const data: { position: string; temperature: number }[] = [];
+  if (!layers.length || temps.length !== layers.length + 1 || totalThicknessM <= 0) return data;
+
+  const cumulative: number[] = [0];
+  for (const l of layers) cumulative.push(cumulative[cumulative.length - 1] + l.thickness);
+
+  for (let i = 0; i <= points; i++) {
+    const xM = (i / points) * totalThicknessM;
+    let layerIdx = 0;
+    while (layerIdx < layers.length - 1 && xM > cumulative[layerIdx + 1]) layerIdx++;
+
+    const x0 = cumulative[layerIdx];
+    const x1 = cumulative[layerIdx + 1];
+    const t0 = temps[layerIdx];
+    const t1 = temps[layerIdx + 1];
+    const frac = x1 > x0 ? (xM - x0) / (x1 - x0) : 0;
+    const temp = t0 + (t1 - t0) * Math.min(1, Math.max(0, frac));
+
+    data.push({
+      position: ((xM * 100) as number).toFixed(1), // cm
+      temperature: Number(temp.toFixed(2)),
+    });
+  }
+
+  return data;
+}
 
 export function ResultsDashboard() {
-  const params = JSON.parse(sessionStorage.getItem('simulationParams') || '{}');
-  const totalThickness = (params.layer1Thickness || 10) + (params.layer2Thickness || 5) + (params.layer3Thickness || 10);
-  const heatFlux = ((params.hotTemp || 35) - (params.coldTemp || 10)) / (totalThickness / 100) * 0.5;
+  const params = JSON.parse(sessionStorage.getItem("simulationParams") || "null") as SimulationParams | null;
+  const result = JSON.parse(sessionStorage.getItem("simulationResult") || "null") as SimulationResult | null;
+
+  if (!params || !result) {
+    return (
+      <div className="min-h-screen bg-[#F8F9FB] py-8">
+        <div className="max-w-[1440px] mx-auto px-8">
+          <Card className="p-6 border-gray-200">
+            <div className="text-lg text-[#0A2540] mb-2">No results found</div>
+            <div className="text-sm text-gray-600 mb-4">
+              Please run a simulation to generate results.
+            </div>
+            <Link to="/input">
+              <Button className="bg-[#3A86FF] hover:bg-[#2A76EF] text-white">Go to Inputs</Button>
+            </Link>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  const deltaT = params.boundary.T_left - params.boundary.T_inf;
+  const rTotal = result.resistance;
+  const uValue = rTotal > 0 ? 1 / rTotal : null;
+  const tempData = buildTempProfile(params, result);
 
   return (
     <div className="min-h-screen bg-[#F8F9FB] py-8">
@@ -68,7 +98,7 @@ export function ResultsDashboard() {
                 Simulation Results
               </h1>
               <p className="text-gray-600">
-                CFD analysis completed successfully with 98.7% convergence
+                Computation completed successfully
               </p>
             </div>
             <div className="flex gap-3">
@@ -85,7 +115,6 @@ export function ResultsDashboard() {
             </div>
           </div>
         </motion.div>
-
         {/* Key Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <motion.div
@@ -95,7 +124,7 @@ export function ResultsDashboard() {
           >
             <Card className="p-6 border-gray-200">
               <div className="text-sm text-gray-600 mb-3">Heat Flux</div>
-              <div className="text-3xl text-[#0A2540] mb-1">{heatFlux.toFixed(2)}</div>
+              <div className="text-3xl text-[#0A2540] mb-1">{result.heat_flux.toFixed(2)}</div>
               <div className="text-sm text-gray-600">W/m²</div>
             </Card>
           </motion.div>
@@ -108,7 +137,7 @@ export function ResultsDashboard() {
             <Card className="p-6 border-gray-200">
               <div className="text-sm text-gray-600 mb-3">Temp Drop</div>
               <div className="text-3xl text-[#0A2540] mb-1">
-                {((params.hotTemp || 35) - (params.coldTemp || 10)).toFixed(1)}
+                {deltaT.toFixed(1)}
               </div>
               <div className="text-sm text-gray-600">°C</div>
             </Card>
@@ -120,9 +149,9 @@ export function ResultsDashboard() {
             transition={{ duration: 0.5, delay: 0.3 }}
           >
             <Card className="p-6 border-gray-200">
-              <div className="text-sm text-gray-600 mb-3">R-Value</div>
+              <div className="text-sm text-gray-600 mb-3">Total Resistance</div>
               <div className="text-3xl text-[#0A2540] mb-1">
-                {(totalThickness / 10).toFixed(2)}
+                {rTotal.toFixed(3)}
               </div>
               <div className="text-sm text-gray-600">m²·K/W</div>
             </Card>
@@ -134,9 +163,11 @@ export function ResultsDashboard() {
             transition={{ duration: 0.5, delay: 0.4 }}
           >
             <Card className="p-6 border-gray-200">
-              <div className="text-sm text-gray-600 mb-3">Efficiency</div>
-              <div className="text-3xl text-[#0A2540] mb-1">94.2</div>
-              <div className="text-sm text-gray-600">%</div>
+              <div className="text-sm text-gray-600 mb-3">U-Value</div>
+              <div className="text-3xl text-[#0A2540] mb-1">
+                {uValue === null ? "—" : uValue.toFixed(3)}
+              </div>
+              <div className="text-sm text-gray-600">W/m²·K</div>
             </Card>
           </motion.div>
         </div>
@@ -219,22 +250,22 @@ export function ResultsDashboard() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
                     <span className="text-sm text-gray-700">T₁ (Hot)</span>
-                    <span className="text-lg text-red-600">{params.hotTemp || 35}°C</span>
+                    <span className="text-lg text-red-600">{result.temperatures[0].toFixed(1)}°C</span>
                   </div>
                   
                   <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
                     <span className="text-sm text-gray-700">T₁₋₂</span>
-                    <span className="text-lg text-orange-600">{((params.hotTemp || 35) - 7).toFixed(1)}°C</span>
+                    <span className="text-lg text-orange-600">{result.temperatures[1]?.toFixed(1)}°C</span>
                   </div>
                   
                   <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
                     <span className="text-sm text-gray-700">T₂₋₃</span>
-                    <span className="text-lg text-green-600">{((params.coldTemp || 10) + 2).toFixed(1)}°C</span>
+                    <span className="text-lg text-green-600">{result.temperatures[2]?.toFixed(1)}°C</span>
                   </div>
                   
                   <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
                     <span className="text-sm text-gray-700">T₃ (Cold)</span>
-                    <span className="text-lg text-blue-600">{params.coldTemp || 10}°C</span>
+                    <span className="text-lg text-blue-600">{result.temperatures[result.temperatures.length - 1].toFixed(1)}°C</span>
                   </div>
                 </div>
               </Card>
@@ -254,13 +285,6 @@ export function ResultsDashboard() {
                     <Button variant="outline" className="w-full justify-start">
                       <Eye className="w-4 h-4 mr-2" />
                       View Layer Visualization
-                    </Button>
-                  </Link>
-                  
-                  <Link to="/ai-recommendation">
-                    <Button variant="outline" className="w-full justify-start">
-                      <ArrowRight className="w-4 h-4 mr-2" />
-                      Get AI Recommendations
                     </Button>
                   </Link>
                   
