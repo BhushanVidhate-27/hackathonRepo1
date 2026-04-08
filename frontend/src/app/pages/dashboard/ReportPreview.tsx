@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import { Download, Share2, Printer, Calendar, Building2, User, Mail } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { downloadBlob } from "../../lib/download";
-import { apiFetch, apiFetchBlob } from "../../lib/api";
+import { apiFetch } from "../../lib/api";
 
 type SimulationParams = {
   layers: { thickness: number; k: number; material?: string }[];
@@ -62,14 +62,18 @@ export function ReportPreview() {
 
   const handleExportPdf = async () => {
     // Backend-backed file generation (JSON for now).
-    const { blob, filename } = await apiFetchBlob("/api/report/json", {
+    const res = await fetch(`${(window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") ? "http://localhost:8080" : ""}/api/report/json`, {
       method: "POST",
-      json: snapshot,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(snapshot),
     });
-    downloadBlob(
-      filename || `thermal-report-${new Date().toISOString().slice(0, 10)}.json`,
-      blob
-    );
+    if (!res.ok) throw new Error(`Export failed: ${res.status} ${res.statusText}`);
+    const blob = await res.blob();
+
+    const disposition = res.headers.get("content-disposition") || "";
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename = match?.[1] || `thermal-report-${new Date().toISOString().slice(0, 10)}.json`;
+    downloadBlob(filename, blob);
   };
 
   const handleShare = async () => {
