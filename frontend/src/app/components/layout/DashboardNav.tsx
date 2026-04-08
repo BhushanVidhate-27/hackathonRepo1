@@ -42,12 +42,6 @@ export function DashboardNav() {
             })}
           </div>
 
-          {/* User */}
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#3A86FF] flex items-center justify-center text-white text-sm">
-              JD
-            </div>
-          </div>
         </div>
       </div>
     </nav>
