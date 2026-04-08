@@ -1,0 +1,15 @@
+{
+  "uiDraft": {
+    "hotTemp": "",
+    "coldTemp": "",
+    "layers": [
+      {
+        "id": "1",
+        "thickness": "",
+        "conductivity": "",
+        "unit": "cm"
+      }
+    ]
+  },
+  "updatedAt": "2026-04-08T08:59:19.660Z"
+}
