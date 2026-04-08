@@ -53,6 +53,17 @@ export function SimulationScreen() {
 
         if (cancelled) return;
         sessionStorage.setItem("simulationResult", JSON.stringify(result));
+
+        // Persist across refresh/reopen (best-effort).
+        try {
+          await apiFetch("/api/state", {
+            method: "PUT",
+            json: { simulationParams: params, simulationResult: result },
+          });
+        } catch {
+          // ignore persistence failures
+        }
+
         navigate("/results");
       } catch (e: any) {
         if (cancelled) return;

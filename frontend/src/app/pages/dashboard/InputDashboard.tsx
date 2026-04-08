@@ -1,5 +1,4 @@
-import React from "react";
-import { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -7,6 +6,7 @@ import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { ArrowRight, AlertCircle, Plus, Trash2 } from "lucide-react";
 import { motion } from "motion/react";
+import { apiFetch } from "../../lib/api";
 
 interface Layer {
   id: string;
@@ -14,6 +14,12 @@ interface Layer {
   conductivity: string;
   unit: string;
 }
+
+type UiDraft = {
+  hotTemp: string;
+  coldTemp: string;
+  layers: Layer[];
+};
 
 export function InputDashboard() {
   const navigate = useNavigate();
@@ -24,6 +30,62 @@ export function InputDashboard() {
   const [layers, setLayers] = useState<Layer[]>([
     { id: "1", thickness: "", conductivity: "", unit: "cm" }
   ]);
+
+  // Hydrate inputs from saved draft (preferred) or last simulationParams.
+  useEffect(() => {
+    const draftRaw = sessionStorage.getItem("uiDraft");
+    if (draftRaw) {
+      try {
+        const d = JSON.parse(draftRaw) as UiDraft;
+        if (typeof d?.hotTemp === "string") setHotTemp(d.hotTemp);
+        if (typeof d?.coldTemp === "string") setColdTemp(d.coldTemp);
+        if (Array.isArray(d?.layers) && d.layers.length) setLayers(d.layers);
+        return;
+      } catch {
+        // ignore and fall back
+      }
+    }
+
+    const paramsRaw = sessionStorage.getItem("simulationParams");
+    if (!paramsRaw) return;
+    try {
+      const p = JSON.parse(paramsRaw) as any;
+      const hot = p?.boundary?.T_left;
+      const cold = p?.boundary?.T_inf;
+      if (typeof hot === "number") setHotTemp(String(hot));
+      if (typeof cold === "number") setColdTemp(String(cold));
+      if (Array.isArray(p?.layers) && p.layers.length) {
+        setLayers(
+          p.layers.map((l: any, idx: number) => ({
+            id: String(idx + 1),
+            thickness:
+              typeof l?.thickness === "number" && Number.isFinite(l.thickness)
+                ? String((l.thickness * 100).toFixed(2)) // m -> cm
+                : "",
+            conductivity:
+              typeof l?.k === "number" && Number.isFinite(l.k) ? String(l.k) : "",
+            unit: "cm",
+          }))
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Auto-save the draft as the user types, so it survives refresh/reopen.
+  const draft: UiDraft = useMemo(
+    () => ({ hotTemp, coldTemp, layers }),
+    [hotTemp, coldTemp, layers]
+  );
+
+  useEffect(() => {
+    sessionStorage.setItem("uiDraft", JSON.stringify(draft));
+    const t = setTimeout(() => {
+      apiFetch("/api/state", { method: "PUT", json: { uiDraft: draft } }).catch(() => {});
+    }, 250);
+    return () => clearTimeout(t);
+  }, [draft]);
 
   const addLayer = () => {
     const newLayer: Layer = {

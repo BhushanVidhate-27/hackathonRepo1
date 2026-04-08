@@ -1,9 +1,25 @@
 import { Link, useLocation } from "react-router";
 import { Button } from "../ui/button";
 import { Activity, Home, BarChart3, Layers, GitCompare, FileText } from "lucide-react";
+import { apiFetch } from "../../lib/api";
 
 export function DashboardNav() {
   const location = useLocation();
+  const handleClear = async () => {
+    const ok = window.confirm("Clear saved simulation data?");
+    if (!ok) return;
+
+    try {
+      await apiFetch("/api/state", { method: "DELETE" });
+    } catch {
+      // ignore; still clear local copy
+    }
+
+    sessionStorage.removeItem("simulationParams");
+    sessionStorage.removeItem("simulationResult");
+    sessionStorage.removeItem("uiDraft");
+    window.location.href = "/dashboard";
+  };
 
   const navItems = [
     { path: "/dashboard", label: "Input", icon: Home },
@@ -40,6 +56,12 @@ export function DashboardNav() {
                 </Link>
               );
             })}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" className="text-[#0A2540] hover:bg-gray-100" onClick={handleClear}>
+              Clear saved
+            </Button>
           </div>
 
         </div>

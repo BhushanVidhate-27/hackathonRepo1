@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import { Download, Share2, Printer, Calendar, Building2 } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { downloadBlob } from "../../lib/download";
-import { apiFetch } from "../../lib/api";
+import { apiFetch, apiFetchBlob } from "../../lib/api";
 
 type SimulationParams = {
   layers: { thickness: number; k: number; material?: string }[];
@@ -62,18 +62,18 @@ export function ReportPreview() {
 
   const handleExportPdf = async () => {
     // Backend-backed file generation (JSON for now).
-    const res = await fetch(`${(window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") ? "http://localhost:8080" : ""}/api/report/json`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(snapshot),
-    });
-    if (!res.ok) throw new Error(`Export failed: ${res.status} ${res.statusText}`);
-    const blob = await res.blob();
+    // Save snapshot so it survives refresh/reopen (best-effort).
+    try {
+      await apiFetch("/api/state", { method: "PUT", json: { reportSnapshot: snapshot } });
+    } catch {
+      // ignore persistence failures
+    }
 
-    const disposition = res.headers.get("content-disposition") || "";
-    const match = disposition.match(/filename="([^"]+)"/);
-    const filename = match?.[1] || `thermal-report-${new Date().toISOString().slice(0, 10)}.json`;
-    downloadBlob(filename, blob);
+    const { blob, filename } = await apiFetchBlob("/api/report/json", {
+      method: "POST",
+      json: snapshot,
+    });
+    downloadBlob(filename || `thermal-report-${new Date().toISOString().slice(0, 10)}.json`, blob);
   };
 
   const handleShare = async () => {
@@ -196,8 +196,12 @@ export function ReportPreview() {
               
               <div className="grid grid-cols-3 gap-4 mt-6">
                 <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="text-sm text-gray-600 mb-1">Simulation Accuracy</div>
-                  <div className="text-2xl text-blue-600">—</div>
+                  <div className="text-sm text-gray-600 mb-1">Heat Loss</div>
+                  <div className="text-2xl text-blue-600">
+                    {typeof result?.heat_flux === "number"
+                      ? `${(result.heat_flux * (typeof params?.area === "number" ? params.area : 1)).toFixed(2)} W`
+                      : "—"}
+                  </div>
                 </div>
                 <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                   <div className="text-sm text-gray-600 mb-1">U-Value</div>

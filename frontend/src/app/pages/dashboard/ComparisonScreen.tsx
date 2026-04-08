@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { motion } from "motion/react";
 import React, { useEffect, useMemo, useState } from "react";
 import { Award, Star, TrendingUp } from "lucide-react";
+import { useNavigate } from "react-router";
 import { apiFetch } from "../../lib/api";
 import { readMaterialUsageStats } from "../../lib/materialUsage";
 
@@ -59,12 +60,14 @@ function buildTempProfile(params: SimulationParams, result: SimulationResult) {
 }
 
 export function ComparisonScreen() {
+  const navigate = useNavigate();
   const currentParams = JSON.parse(sessionStorage.getItem("simulationParams") || "null") as SimulationParams | null;
   const currentResult = JSON.parse(sessionStorage.getItem("simulationResult") || "null") as SimulationResult | null;
 
   const [idealResult, setIdealResult] = useState<SimulationResult | null>(null);
   const [idealMaterial, setIdealMaterial] = useState<string | null>(null);
   const [bestMaterial, setBestMaterial] = useState<{ name: string; k: number } | null>(null);
+  const [idealParams, setIdealParams] = useState<SimulationParams | null>(null);
   const [error, setError] = useState<string>("");
 
   useEffect(() => {
@@ -99,6 +102,7 @@ export function ComparisonScreen() {
         });
 
         if (cancelled) return;
+        setIdealParams(idealParams);
         setIdealMaterial(bestName);
         setIdealResult(res);
       } catch (e: any) {
@@ -143,6 +147,24 @@ export function ComparisonScreen() {
   }, [currentParams, currentResult, idealResult]);
 
   const usage = useMemo(() => readMaterialUsageStats(), []);
+
+  const handleApplyConfigB = async () => {
+    if (!idealParams || !idealResult) return;
+
+    sessionStorage.setItem("simulationParams", JSON.stringify(idealParams));
+    sessionStorage.setItem("simulationResult", JSON.stringify(idealResult));
+
+    try {
+      await apiFetch("/api/state", {
+        method: "PUT",
+        json: { simulationParams: idealParams, simulationResult: idealResult },
+      });
+    } catch {
+      // ignore persistence failures
+    }
+
+    navigate("/results");
+  };
 
   return (
     <div className="min-h-screen bg-[#F8F9FB] py-8">
@@ -398,7 +420,11 @@ export function ComparisonScreen() {
             </div>
 
             <div className="mt-6 flex justify-center">
-              <Button className="bg-[#3A86FF] hover:bg-[#2A76EF] text-white px-8">
+              <Button
+                className="bg-[#3A86FF] hover:bg-[#2A76EF] text-white px-8"
+                onClick={handleApplyConfigB}
+                disabled={!idealParams || !idealResult}
+              >
                 Apply Configuration B
               </Button>
             </div>
